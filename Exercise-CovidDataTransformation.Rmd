@@ -7,7 +7,7 @@ editor_options:
   chunk_output_type: inline
 ---
 
-```{r setup, include=TRUE}
+```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(here)
 library(tidyverse)
@@ -32,18 +32,21 @@ dc <- dc %>%
   #  'testsConducted' 
   #'casesDiagnosed') 
   #that hold the name of the kommune and the values of the number of diagnosed cases
-  pivot_longer(XXXXXX) %>%
+  pivot_longer(cols = !date_sample, names_to = 'kommune', values_to='casesDiagnosed') %>%
   arrange(kommune, date_sample)
+#names_to names the columns with pivoted column names
+#values_to names column with pivoted values
 dc
 ```
 
 ```{r testedPeople, include=TRUE}
-dc <- dc %>%
+dt <- dt %>%
   # use pivot_longer to transpose all columns (apart from PrDate_adjusted) to two columns ('kommune','testsConducted') that hold the name of the kommune and the values of the number of conducted tests
-  pivot_longer(XXXXX) %>%
+  pivot_longer(cols = !PrDate_adjusted, names_to = 'kommune', values_to = 'testsConducted') %>%
   arrange(kommune, PrDate_adjusted) %>%
   rename(date_sample = PrDate_adjusted) %>%
   filter(!(kommune == "X101"))
+dt
 ```
 
 ```{r NAtests, include=TRUE}
@@ -97,10 +100,10 @@ dc <- dc %>%
   group_by(kommune) %>%
   arrange(kommune, date_sample) %>%
   mutate(
-    dcr100k = XXX,
-    dcr7d = XXX,
-    dcr7dPer100k = XXX,
-    dcr7dPer100kCh7 = XXX
+    dcr100k = (casesDiagnosed/population)*100000,
+    dcr7d = roll_sum(casesDiagnosed, width = 7, min_obs=1),
+    dcr7dPer100k = (dcr7d/population)*100000,
+    dcr7dPer100kCh7 = dcr7dPer100k-lag(dcr7dPer100k,7)
   )
 
 dc
@@ -109,17 +112,17 @@ dc
 ```{r DeriveVariablesTests}
 # create new variables within mutate
 # (e.g. 
-# tested numbers per 1000 people (tr100k)
+# tested numbers per 100.000 people (tr100k)
 # rolling aggregates with roll_sum - cases of the last seven days (tr7d) - and per 100k inhabitants (tr7dP100k)
 # use the lag function to compute the differences between a day's (7day sum) value and the one from 7 days ago (tr7dP100kCh7)
 dt <- dt %>%
   group_by(kommune) %>%
   arrange(kommune, date_sample) %>%
   mutate(
-    tr100k = XXX,
-    tr7d = XXX,
-    tr7dP100k = XXX,
-    tr7dP100kCh7 = XXX
+    tr100k = (testsConducted/population)*100000,
+    tr7d = roll_sum(testsConducted,width=7,min_obs=1),
+    tr7dP100k = (tr7d/population)*100000,
+    tr7dP100kCh7 = tr7dP100k-lag(tr7dP100k,7)
   )
 dt
 ```
@@ -130,7 +133,7 @@ df <- as_tibble(merge(dc, dt))
 df
 
 # create test positive variables
-dc <- dc %>%
+df <- df %>%
   mutate(
     PosTestRateOnDay = dcr100k / tr100k,
     PosTestRate7d = dcr7dPer100k / tr7dP100k,
